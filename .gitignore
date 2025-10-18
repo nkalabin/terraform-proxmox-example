@@ -1,0 +1,42 @@
+# =============================================================================
+# GITIGNORE ДЛЯ PROXMOX TERRAFORM ПРОЕКТА
+# =============================================================================
+
+# Terraform состояния и планы (содержат секретные данные)
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+crash.*.log
+
+# Файлы переменных с секретными данными
+# ВАЖНО: terraform.tfvars содержит токены API и пароли!
+*.tfvars
+*.auto.tfvars
+!*.tfvars.example  # Разрешаем только примеры
+
+# Файлы окружения
+.env
+.env.local
+.env.*.local
+
+# IDE и редакторы
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Резервные копии
+*.backup
+*.bak
+
+# Логи
+*.log
