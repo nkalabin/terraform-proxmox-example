@@ -1,2 +1,5 @@
-# terraform-proxmox-example
-My personal example terraform for deploy VM on proxmox from template with cloud-init configuration
+# Это пример и он находится в разработке, часть функций может не работать корректно
+
+# Terraform модуль для Proxmox VE
+
+Этот проект содержит Terraform конфигурацию для автоматизированного создания виртуальных машин в Proxmox VE из готовых шаблонов. Модуль поддерживает настройку cloud-init, сетевых параметров и ресурсов VM через переменные.
