@@ -1,0 +1,38 @@
+#cloud-config
+hostname: ${fqdn}
+fqdn: ${fqdn}
+manage_etc_hosts: true
+
+users:
+  - default
+  - name: user
+    gecos: "Cloud User"
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: users, adm, wheel, sudo
+    shell: /bin/bash
+    lock_passwd: false
+
+chpasswd:
+  list: |
+    root:toor
+    user:user
+  expire: False
+
+ssh_pwauth: true
+
+packages:
+  - qemu-guest-agent
+
+runcmd:
+  - systemctl restart systemd-sysctl
+  - apt update
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
+  - localectl set-locale LANG=en_US.UTF-8
+  - systemctl stop apparmor.service
+  - systemctl disable apparmor.service
+  - apt remove -y apparmor --purge
+  - rm -fr /etc/apparmor.d/
+  - sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+  - swapoff -a
+  - reboot

@@ -1,95 +1,82 @@
-# =============================================================================
-# PROXMOX TERRAFORM MODULE
-# Создание VM из шаблона в Proxmox
-# =============================================================================
-
-# Provider Configuration - настройки в terraform.tfvars
 provider "proxmox" {
-  pm_api_url          = var.proxmox_api_url
-  pm_api_token_id     = var.proxmox_api_token_id
-  pm_api_token_secret = var.proxmox_api_token_secret
-  pm_tls_insecure     = var.proxmox_tls_insecure
+  endpoint = var.proxmox_api_url
+  username = var.username
+  password = var.password
+  insecure = var.insecure
 }
 
+resource "proxmox_virtual_environment_vm" "debian_vms" {
+  count           = length(var.vms)
+  name            = var.vms[count.index].name
+  node_name       = var.node_name
+  stop_on_destroy = true
 
-# Virtual Machine Resource - настройки в terraform.tfvars
-resource "proxmox_vm_qemu" "vm" {
-  name        = var.vm_name          # ИЗМЕНИТЕ: имя VM в terraform.tfvars
-  description = var.vm_description
-  target_node = var.target_node      # ИЗМЕНИТЕ: узел Proxmox в terraform.tfvars
-  clone       = var.template_name    # ИЗМЕНИТЕ: имя шаблона в terraform.tfvars
+  initialization {
+    ip_config {
+      ipv4 {
+        address = "dhcp"
+      }
+    }
+    user_data_file_id = proxmox_virtual_environment_file.debian_base_cloud_config[count.index].id
+  }
 
-  # VM Configuration - базовые настройки
-  agent    = 1                       # Включить QEMU guest agent
-  os_type  = "cloud-init"            # Тип ОС для cloud-init
-  memory   = var.vm_memory           # ИЗМЕНИТЕ: память в terraform.tfvars
-  scsihw   = "virtio-scsi-single"    # SCSI контроллер
-  bios     = "seabios"               # BIOS (seabios или ovmf)
-  full_clone = true                  # Полное клонирование шаблона
-  
-  # CPU Configuration
   cpu {
-    type    = "host"
-    cores   = var.vm_cores
-    sockets = var.vm_sockets
+    cores = var.vms[count.index].cores
+    type  = "host"
   }
 
-  # Disk Configuration - клонирование диска шаблона и cloud-init
-  disks {
-    # Диск шаблона будет клонирован как scsi0
-    scsi {
-      scsi0 {
-        disk {
-          size = var.vm_disk_size        # ИЗМЕНИТЕ: размер диска в terraform.tfvars
-          storage = var.storage_name     # ИЗМЕНИТЕ: хранилище в terraform.tfvars
-          format = "raw"                 # Формат диска (raw, qcow2)
-        }
-      }
-    }
-    # Cloud-init диск
-    ide {
-      ide3 {
-        cloudinit {
-          storage = var.storage_name     # ИЗМЕНИТЕ: хранилище в terraform.tfvars
-        }
-      }
-    }
+  operating_system {
+    type = "l26"
   }
 
-  # Network Configuration - сетевые настройки
-  network {
-    id     = 0                          # ID сетевого интерфейса
-    model  = "virtio"                   # Модель сетевой карты (virtio, e1000, rtl8139)
-    bridge = var.vm_bridge              # ИЗМЕНИТЕ: сетевой мост в terraform.tfvars
-    tag    = var.vm_vlan_tag            # ИЗМЕНИТЕ: VLAN тег в terraform.tfvars
+  agent {
+    enabled = true
   }
 
-  # Boot Configuration - загрузка с диска шаблона
-  boot = "order=scsi0"                  # ИЗМЕНИТЕ: если шаблон использует другой диск
-
-  # Cloud-init Configuration - настройки пользователя и сети
-  ipconfig0  = var.vm_ip_config         # ИЗМЕНИТЕ: IP конфигурация в terraform.tfvars
-  nameserver = var.vm_nameserver        # ИЗМЕНИТЕ: DNS сервер в terraform.tfvars
-  ciuser     = var.vm_user              # ИЗМЕНИТЕ: имя пользователя в terraform.tfvars
-  
-  # Additional cloud-init settings
-  cicustom = var.vm_cloud_init_custom   # ИЗМЕНИТЕ: кастомные cloud-init настройки
-  cipassword = var.vm_password          # ИЗМЕНИТЕ: пароль в terraform.tfvars
-  sshkeys = var.vm_ssh_keys != null ? var.vm_ssh_keys : null  # ИЗМЕНИТЕ: SSH ключи
-
-  # Tags
-  tags = join(";", var.vm_tags)
-
-  # Lifecycle rules
-  lifecycle {
-    ignore_changes = [
-      # Ignore changes to network interface MAC address
-      network,
-      # Ignore changes to disk size after creation
-      disks,
-    ]
+  serial_device {
+    device = "socket"
   }
 
-  # Ensure VM is stopped before destroying
-  onboot = false
+  memory {
+    dedicated = var.vms[count.index].memory
+    floating  = var.vms[count.index].memory
+  }
+
+  network_device {
+    bridge  = var.bridge
+    vlan_id = var.vlan_id
+    model   = "virtio"
+  }
+
+  disk {
+    datastore_id = var.datastore_for_vm_disk
+    import_from  = proxmox_virtual_environment_download_file.debian_cloud_image.id
+    interface    = "virtio0"
+    iothread     = true
+    discard      = "ignore"
+    cache        = "none"
+    replicate    = false
+    size         = var.vms[count.index].disk_size
+  }
+}
+resource "proxmox_virtual_environment_download_file" "debian_cloud_image" {
+  content_type = "import"
+  datastore_id = var.datastore_for_cloud_init
+  node_name    = var.node_name
+  url          = "https://cdimage.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2"
+}
+
+resource "proxmox_virtual_environment_file" "debian_base_cloud_config" {
+  count        = length(var.vms)
+  content_type = "snippets"
+  datastore_id = var.datastore_for_cloud_init
+  node_name    = var.node_name
+
+  source_raw {
+    data = templatefile("${path.module}${var.cloud_init_file}", {
+      fqdn = var.vms[count.index].name
+    })
+
+    file_name = "${var.vms[count.index].name}-default.yaml"
+  }
 }
