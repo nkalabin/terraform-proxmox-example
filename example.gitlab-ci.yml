@@ -1,0 +1,24 @@
+stages:
+  - deploy
+  - remove
+
+provision:
+  image:
+    name: <terraform image>
+    entrypoint: [""]
+  stage: deploy
+  script:
+    - cp ./.terraformrc ~/.terraformrc
+    - terraform init
+    - terraform apply -auto-approve
+
+remove:
+  image:
+    name: <terraform image>
+    entrypoint: [""]
+  stage: remove
+  when: manual
+  script:
+    - cp ./.terraformrc ~/.terraformrc
+    - terraform init
+    - terraform destroy -auto-approve
